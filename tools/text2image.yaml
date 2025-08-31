@@ -1,0 +1,70 @@
+# 工具描述
+description:
+  human:
+    en_US: Generate high-quality images from text prompts using OpenRouter API with multiple AI models support (Gemini, DALL-E, Claude). Powered by Nano Banana technology.
+    zh_Hans: 使用 OpenRouter API 从文本提示生成高质量图像，支持多种 AI 模型（Gemini、DALL-E、Claude）。由 Nano Banana 技术驱动。
+  llm: This tool generates images from text descriptions using OpenRouter API. It supports multiple AI models including Google Gemini, OpenAI DALL-E, and Anthropic Claude for diverse image generation capabilities.
+
+# 扩展配置
+extra:
+  python:
+    source: tools/text2image.py
+
+# 身份信息
+identity:
+  author: wwwzhouhui
+  icon: icon.svg
+  label:
+    en_US: Nano Banana Text2Image
+    zh_Hans: Nano Banana 文生图
+  name: text2image
+
+# 参数配置
+parameters:
+- form: llm
+  human_description:
+    en_US: The text prompt to generate image from. Describe what you want to see in the image in detail. For example "A golden cat sitting on a red sofa in a cozy living room with warm lighting".
+    zh_Hans: 用于生成图像的文本提示。详细描述您希望在图像中看到的内容。例如"一只金色的猫坐在温暖灯光下舒适客厅的红色沙发上"。
+  label:
+    en_US: Image Prompt
+    zh_Hans: 图像提示词
+  llm_description: Text prompt that describes the desired image content in detail. The more specific and descriptive, the better the generated image quality.
+  name: prompt
+  required: true
+  type: string
+
+- form: form
+  human_description:
+    en_US: The AI model to use for image generation. Different models have different capabilities, quality, and costs. Free models are great for testing, premium models offer higher quality.
+    zh_Hans: 用于图像生成的 AI 模型。不同模型具有不同的能力、质量和成本。免费模型适合测试，付费模型提供更高质量。
+  label:
+    en_US: AI Model
+    zh_Hans: AI 模型
+  name: model
+  type: select
+  options:
+  - label:
+      en_US: Gemini 2.5 Flash (Free) - Fast & Good Quality
+      zh_Hans: Gemini 2.5 Flash (免费) - 快速且质量良好
+    value: "google/gemini-2.5-flash-image-preview:free"
+  - label:
+      en_US: DALL-E 3 (Premium) - Highest Quality
+      zh_Hans: DALL-E 3 (付费) - 最高质量
+    value: "openai/dall-e-3"
+  - label:
+      en_US: Claude 3.5 Sonnet (Premium) - Creative & Artistic
+      zh_Hans: Claude 3.5 Sonnet (付费) - 创意艺术风格
+    value: "anthropic/claude-3-5-sonnet-20241022"
+  default: "google/gemini-2.5-flash-image-preview:free"
+  required: false
+
+- form: form
+  human_description:
+    en_US: Optional input image URL for image-to-image generation. Provide an image URL to transform or modify an existing image based on your prompt. Leave empty for text-only generation.
+    zh_Hans: 可选的输入图像URL，用于图像到图像生成。提供图像URL以基于您的提示词转换或修改现有图像。留空则仅使用文本生成。
+  label:
+    en_US: Input Image URL (Optional)
+    zh_Hans: 输入图像URL（可选）
+  name: input_image_url
+  type: string
+  required: false

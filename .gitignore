@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 环境变量
+.env
+.env.local
+
+# 测试输出
+test_output*.png
+test_output*.jpg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 日志
+*.log
+
+# 临时文件
+tmp_*
+provider/.ipynb_checkpoints/nano_banana_provider-checkpoint.py
+provider/.ipynb_checkpoints/nano_banana-checkpoint.yaml
+tests/.ipynb_checkpoints/test_openrouter_api-checkpoint.py
+tests/.ipynb_checkpoints/test_plugin-checkpoint.py
+tools/.ipynb_checkpoints/text2image-checkpoint.py

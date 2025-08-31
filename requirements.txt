@@ -1,0 +1,11 @@
+# Dify 插件核心依赖
+dify_plugin>=0.1.0,<0.2.0
+
+# HTTP 请求库
+requests>=2.31.0
+
+# 图像处理库
+Pillow>=10.0.0
+
+# Base64 编码处理（Python 内置）
+# JSON 处理（Python 内置）

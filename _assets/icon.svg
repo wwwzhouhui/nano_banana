@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 香蕉主体 -->
+  <path d="M15 45C15 45 20 25 25 20C30 15 35 12 40 15C45 18 50 25 48 35C46 45 40 50 35 52C30 54 25 52 20 48C17 46 15 45 15 45Z" fill="#FFD700" stroke="#FFA500" stroke-width="2"/>
+  
+  <!-- 香蕉纹理线条 -->
+  <path d="M20 42C22 35 25 28 30 22" stroke="#FFA500" stroke-width="1.5" fill="none"/>
+  <path d="M25 45C27 38 30 31 35 25" stroke="#FFA500" stroke-width="1.5" fill="none"/>
+  <path d="M30 47C32 40 35 33 40 28" stroke="#FFA500" stroke-width="1.5" fill="none"/>
+  
+  <!-- AI 元素 - 电路图案 -->
+  <circle cx="32" cy="32" r="3" fill="#FF6B35"/>
+  <path d="M29 32L26 29M35 32L38 29M32 29L32 26M32 35L32 38" stroke="#FF6B35" stroke-width="2" stroke-linecap="round"/>
+  
+  <!-- 装饰性光点 -->
+  <circle cx="22" cy="38" r="1.5" fill="#FFF" opacity="0.8"/>
+  <circle cx="38" cy="28" r="1.5" fill="#FFF" opacity="0.8"/>
+  <circle cx="28" cy="48" r="1" fill="#FFF" opacity="0.6"/>
+  
+  <!-- 文字 "NB" (Nano Banana) -->
+  <text x="45" y="55" font-family="Arial, sans-serif" font-size="8" font-weight="bold" fill="#333">NB</text>
+</svg>

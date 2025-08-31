@@ -1,0 +1,37 @@
+# 认证配置
+credentials_for_provider:
+  api_key:
+    help:
+      en_US: Get your OpenRouter API key from https://openrouter.ai/keys. You need to create an account and generate an API key.
+      zh_Hans: 从 OpenRouter 平台获取您的 API Key。您需要创建账户并生成 API 密钥。
+    label:
+      en_US: OpenRouter API Key
+      zh_Hans: OpenRouter API Key
+    placeholder:
+      en_US: Please input your OpenRouter API Key (sk-or-v1-xxxxxx)
+      zh_Hans: 请输入您的 OpenRouter API Key (sk-or-v1-xxxxxx)
+    required: true
+    type: secret-input
+    url: https://openrouter.ai/keys
+
+# 扩展配置
+extra:
+  python:
+    source: provider/nano_banana_provider.py
+
+# 身份信息
+identity:
+  author: wwwzhouhui
+  description:
+    en_US: OpenRouter AI image generation service integration supporting multiple models (Gemini, DALL-E, Claude)
+    zh_Hans: OpenRouter AI 图像生成服务集成，支持多种模型（Gemini、DALL-E、Claude）
+  icon: icon.svg
+  label:
+    en_US: Nano Banana
+    zh_Hans: Nano Banana
+  name: nano_banana
+  tags: [image]
+
+# 工具列表
+tools:
+- tools/text2image.yaml
