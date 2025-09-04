@@ -1,87 +1,87 @@
-# 🍌 Nano Banana OpenRouter 文生图插件
+[中文](./README_CN.md) ｜ English
 
-> 基于 OpenRouter API 的高质量 AI 文生图 Dify 插件，支持多种先进的图像生成模型
+[Project Source Code](https://github.com/wwwzhouhui/nano_banana):
 
-## ✨ 特性
+# 🍌 Nano Banana OpenRouter Text-to-Image Plugin
 
-- 🎨 **多模型支持**: 支持 Google Gemini、OpenAI DALL-E、Anthropic Claude 等多种图像生成模型
-- 🆓 **免费选项**: 提供免费的 Gemini 模型选项，适合测试和轻量使用
-- 💎 **高质量输出**: 支持付费高端模型，提供专业级图像质量
-- 🔄 **图像转换**: 支持图像到图像的转换功能
-- 🌐 **多语言**: 完整的中英文双语支持
-- ⚡ **实时反馈**: 详细的生成进度和状态反馈
-- 🛡️ **错误处理**: 完善的错误处理和用户友好的提示
+> High-quality AI text-to-image Dify plugin based on OpenRouter API, supporting multiple advanced image generation models
 
-## 🚀 快速开始
+## ✨ Features
 
-### 1. 获取 OpenRouter API Key
+- 🎨 **Multi-Model Support**: Supports multiple image generation models including Google Gemini, OpenAI DALL-E, and Anthropic Claude
+- 🆓 **Free Options**: Provides free Gemini model options suitable for testing and light usage
+- 💎 **High-Quality Output**: Supports premium models for professional-grade image quality
+- 🔄 **Image Transformation**: Supports image-to-image transformation functionality
+- 🌐 **Multilingual**: Complete bilingual support in Chinese and English
+- ⚡ **Real-time Feedback**: Detailed generation progress and status feedback
+- 🛡️ **Error Handling**: Comprehensive error handling with user-friendly prompts
 
-1. 访问 [OpenRouter](https://openrouter.ai/keys)
-2. 创建账户并生成 API Key
-3. 复制您的 API Key (格式: `sk-or-v1-xxxxxx`)
+## 🚀 Quick Start
 
-### 2. 安装依赖
+### 1. Get OpenRouter API Key
+
+1. Visit [OpenRouter](https://openrouter.ai/keys)
+2. Create an account and generate an API Key
+3. Copy your API Key (format: `sk-or-v1-xxxxxx`)
+
+### 2. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. 配置环境变量
+### 3. Configure Environment Variables
 
 ```bash
-# 复制环境变量模板
+# Copy environment template
 cp .env.example .env
 
-# 编辑 .env 文件，添加您的 API Key
+# Edit .env file and add your API Key
 OPENROUTER_API_KEY=sk-or-v1-your-api-key-here
 ```
 
-### 4. 测试插件
+### 4. Test Plugin
 
 ```bash
-# 测试 API 连接
+# Test API connection
 python tests/test_openrouter_api.py
 
-# 测试完整插件功能
+# Test full plugin functionality
 python tests/test_plugin.py
 ```
 
-## 🎯 支持的模型
+## 🎯 Supported Models
 
-### 免费模型
-- **Google Gemini 2.5 Flash**: 快速且质量良好，适合日常使用
+### Free Models
+- **Google Gemini 2.5 Flash**: Fast with good quality, suitable for daily use
 
-### 付费模型
-- **OpenAI DALL-E 3**: 最高质量的图像生成
-- **Anthropic Claude 3.5 Sonnet**: 创意和艺术风格图像
+### Premium Models
+- **OpenAI DALL-E 3**: Highest quality image generation
+- **Anthropic Claude 3.5 Sonnet**: Creative and artistic style images
 
-## 📖 使用示例
+## 📖 Usage Examples
 
-###   离线安装插件
+### Offline Plugin Installation
 
-  ![img](https://mypicture-1258720957.cos.ap-nanjing.myqcloud.com/Obsidian/QQ_1756601091330.png)
+![img](https://mypicture-1258720957.cos.ap-nanjing.myqcloud.com/Obsidian/QQ_1756601091330.png)
 
 ![img](https://mypicture-1258720957.cos.ap-nanjing.myqcloud.com/Obsidian/QQ_1756601136039.png)
 
-
-
- 安装完成后，点击右边授权，填写openrouter apikey
+After installation, click authorize on the right and fill in your OpenRouter API key.
 
 ![img](https://mypicture-1258720957.cos.ap-nanjing.myqcloud.com/Obsidian/QQ_1756601191776.png)
 
-### Agent 使用
+### Agent Usage
 
 ![img](https://mypicture-1258720957.cos.ap-nanjing.myqcloud.com/Obsidian/QQ_1756601261838.png)
 
-
-
 ![img](https://mypicture-1258720957.cos.ap-nanjing.myqcloud.com/Obsidian/QQ_1756601417171.png)
 
-### chatflow使用
+### Chatflow Usage
 
 ![img](https://mypicture-1258720957.cos.ap-nanjing.myqcloud.com/Obsidian/QQ_1756601616026.png)
 
- 提示词
+Prompt:
 
 ```
 I'll transform the photo into a character figure scene. The character will stand on a round plastic base, with a box featuring its image behind and a computer displaying Blender modeling. The PVC material will look clear, and the setting will be indoors.
@@ -91,100 +91,98 @@ I'll transform the photo into a character figure scene. The character will stand
 
 ![img](https://mypicture-1258720957.cos.ap-nanjing.myqcloud.com/Obsidian/QQ_1756603375326.png)
 
+## 🛠️ Development Guide
 
-
-## 🛠️ 开发指南
-
-### 项目结构
+### Project Structure
 
 ```
 nano-banana/
-├── manifest.yaml              # 插件配置
-├── main.py                   # 插件入口
-├── requirements.txt          # 依赖管理
-├── provider/                 # OpenRouter 服务提供者
+├── manifest.yaml              # Plugin configuration
+├── main.py                   # Plugin entry point
+├── requirements.txt          # Dependency management
+├── provider/                 # OpenRouter provider
 │   ├── openrouter.yaml
 │   └── openrouter_provider.py
-├── tools/                    # 文生图工具
+├── tools/                    # Text-to-image tool
 │   ├── text2image.yaml
 │   └── text2image.py
-└── tests/                    # 测试文件
+└── tests/                    # Test files
     ├── test_openrouter_api.py
     └── test_plugin.py
 ```
 
-### 核心组件
+### Core Components
 
-1. **OpenRouterProvider**: 管理 API 认证和连接验证
-2. **Text2ImageTool**: 实现文生图核心逻辑
-3. **错误处理**: 完善的异常处理和用户提示
+1. **OpenRouterProvider**: Manages API authentication and connection validation
+2. **Text2ImageTool**: Implements core text-to-image logic
+3. **Error Handling**: Comprehensive exception handling and user prompts
 
-## 🔧 配置说明
+## 🔧 Configuration Guide
 
-### API Key 配置
-- 在 Dify 插件配置中输入您的 OpenRouter API Key
-- 确保 API Key 格式正确 (`sk-or-v1-xxxxxx`)
-- 确认账户有足够余额（付费模型需要）
+### API Key Configuration
+- Enter your OpenRouter API Key in the Dify plugin configuration
+- Ensure the API Key format is correct (`sk-or-v1-xxxxxx`)
+- Confirm your account has sufficient balance (required for premium models)
 
-### 模型选择建议
-- **测试阶段**: 使用免费的 Gemini 模型
-- **生产环境**: 根据质量需求选择付费模型
-- **艺术创作**: 推荐 Claude 3.5 Sonnet
-- **通用高质量**: 推荐 DALL-E 3
+### Model Selection Recommendations
+- **Testing Phase**: Use the free Gemini model
+- **Production Environment**: Choose premium models based on quality requirements
+- **Artistic Creation**: Recommend Claude 3.5 Sonnet
+- **General High-Quality**: Recommend DALL-E 3
 
-## 📊 性能优化
+## 📊 Performance Optimization
 
-- **超时设置**: 60 秒请求超时，适合图像生成任务
-- **错误重试**: 智能错误处理和重试建议
-- **内存管理**: 高效的图像数据处理
-- **格式统一**: 统一输出 PNG 格式确保兼容性
+- **Timeout Settings**: 60-second request timeout suitable for image generation tasks
+- **Error Retry**: Intelligent error handling and retry suggestions
+- **Memory Management**: Efficient image data processing
+- **Format Standardization**: Unified PNG output format for compatibility
 
-## 🐛 故障排除
+## 🐛 Troubleshooting
 
-### 常见问题
+### Common Issues
 
-1. **API Key 无效**
-   - 检查 API Key 格式是否正确
-   - 确认 API Key 未过期
-   - 验证账户状态
+1. **Invalid API Key**
+   - Check if the API Key format is correct
+   - Confirm the API Key hasn't expired
+   - Verify account status
 
-2. **余额不足**
-   - 前往 [OpenRouter Credits](https://openrouter.ai/credits) 充值
-   - 使用免费模型进行测试
+2. **Insufficient Balance**
+   - Go to [OpenRouter Credits](https://openrouter.ai/credits) to recharge
+   - Use free models for testing
 
-3. **生成失败**
-   - 检查提示词是否包含敏感内容
-   - 尝试更换模型
-   - 简化提示词描述
+3. **Generation Failure**
+   - Check if prompts contain sensitive content
+   - Try switching models
+   - Simplify prompt descriptions
 
-4. **网络问题**
-   - 检查网络连接
-   - 确认防火墙设置
-   - 尝试稍后重试
+4. **Network Issues**
+   - Check network connection
+   - Confirm firewall settings
+   - Try again later
 
-## 📝 更新日志
+## 📝 Changelog
 
 ### v0.0.1 (2025-08-30)
-- ✨ 初始版本发布
-- 🔧 基于 OpenRouter API 的完整实现
-- 🎨 支持多种图像生成模型
-- 🧪 完整的测试框架
-- 📖 详细的文档和使用指南
+- ✨ Initial release
+- 🔧 Complete implementation based on OpenRouter API
+- 🎨 Support for multiple image generation models
+- 🧪 Complete test framework
+- 📖 Detailed documentation and usage guide
 
-## 🤝 贡献
+## 🤝 Contributing
 
-欢迎提交 Issue 和 Pull Request！
+Issues and Pull Requests are welcome!
 
-## 📄 许可证
+## 📄 License
 
 MIT License
 
-## 🔗 相关链接
+## 🔗 Related Links
 
-- [OpenRouter API 文档](https://openrouter.ai/docs)
-- [Dify 插件开发文档](https://docs.dify.ai/plugins)
-- [项目开发规范](../CLAUDE3_OpenRouter.md)
+- [OpenRouter API Documentation](https://openrouter.ai/docs)
+- [Dify Plugin Development Documentation](https://docs.dify.ai/plugins)
+- [Project Development Guidelines](../CLAUDE3_OpenRouter.md)
 
 ---
 
-**Nano Banana** - 让 AI 图像生成变得简单而强大！ 🍌✨
+**Nano Banana** - Making AI image generation simple and powerful! 🍌✨
