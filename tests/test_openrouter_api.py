@@ -27,7 +27,7 @@ def test_openrouter_connection():
     
     # 简单的测试请求
     payload = {
-        "model": "google/gemini-2.5-flash-image-preview:free",
+        "model": "deepseek/deepseek-chat-v3.1:free",
         "messages": [
             {
                 "role": "user",

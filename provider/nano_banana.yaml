@@ -23,8 +23,8 @@ extra:
 identity:
   author: wwwzhouhui
   description:
-    en_US: OpenRouter AI image generation service integration supporting multiple models (Gemini, DALL-E, Claude)
-    zh_Hans: OpenRouter AI 图像生成服务集成，支持多种模型（Gemini、DALL-E、Claude）
+    en_US: OpenRouter AI image generation service integration supporting multiple models (Gemini, Claude)
+    zh_Hans: OpenRouter AI 图像生成服务集成，支持多种模型（Gemini、Claude）
   icon: icon.svg
   label:
     en_US: Nano Banana

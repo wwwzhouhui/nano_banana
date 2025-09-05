@@ -31,8 +31,12 @@ class Text2ImageTool(Tool):
             yield self.create_text_message("❌ 请输入图像生成提示词")
             return
             
-        model = tool_parameters.get("model", "google/gemini-2.5-flash-image-preview:free")
+        model = tool_parameters.get("model", "google/gemini-2.5-flash-image-preview")
         input_image_url = tool_parameters.get("input_image_url", "")
+        
+        # 调试信息：显示接收到的参数
+        yield self.create_text_message(f"🔍 调试信息 - 接收到的模型参数: {model}")
+        yield self.create_text_message(f"🔍 调试信息 - 所有参数: {tool_parameters}")
         
         # 3. 构建请求头（完全按照 zz.py 的格式）
         headers = {

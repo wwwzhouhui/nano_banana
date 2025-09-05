@@ -44,3 +44,8 @@ provider/.ipynb_checkpoints/nano_banana-checkpoint.yaml
 tests/.ipynb_checkpoints/test_openrouter_api-checkpoint.py
 tests/.ipynb_checkpoints/test_plugin-checkpoint.py
 tools/.ipynb_checkpoints/text2image-checkpoint.py
+.ipynb_checkpoints/main-checkpoint.py
+.ipynb_checkpoints/manifest-checkpoint.yaml
+.ipynb_checkpoints/README_CN-checkpoint.md
+.gitignore
+tools/.ipynb_checkpoints/text2image-checkpoint.yaml

@@ -61,18 +61,13 @@ class NanaBananaProvider(ToolProvider):
                 "Content-Type": "application/json"
             }
             
-            # 发送一个简单的测试请求
+            # 使用一个更通用的模型进行测试，避免404错误
             test_payload = {
-                "model": "google/gemini-2.5-flash-image-preview:free",
+                "model": "deepseek/deepseek-chat-v3.1:free",  # 使用更常见的模型进行验证
                 "messages": [
                     {
                         "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": "test"
-                            }
-                        ]
+                        "content": "test"  # 简化内容格式
                     }
                 ],
                 "max_tokens": 1  # 最小 token 数量，减少费用

@@ -2,8 +2,8 @@
 author: wwwzhouhui
 created_at: '2025-08-30T10:00:00.000000000Z'
 description:
-  en_US: AI text-to-image generation plugin powered by OpenRouter API with multiple models support
-  zh_Hans: 基于 OpenRouter API 的 AI 文生图插件，支持多种模型
+  en_US: AI text-to-image generation plugin powered by OpenRouter API with multiple models support (Gemini, Claude)
+  zh_Hans: 基于 OpenRouter API 的 AI 文生图插件，支持多种模型（Gemini、Claude）
 icon: icon.svg
 label:
   en_US: Nano Banana Text2Image
@@ -16,7 +16,7 @@ meta:
     entrypoint: main
     language: python
     version: '3.12'
-  version: 0.0.1
+  version: 0.0.3
 
 # 插件配置
 name: nano_banana_text2image
@@ -37,4 +37,4 @@ resource:
 # 标签和类型
 tags: [productivity]
 type: plugin
-version: 0.0.1
+version: 0.0.3

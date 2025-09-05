@@ -1,9 +1,9 @@
 # 工具描述
 description:
   human:
-    en_US: Generate high-quality images from text prompts using OpenRouter API with multiple AI models support (Gemini, DALL-E, Claude). Powered by Nano Banana technology.
-    zh_Hans: 使用 OpenRouter API 从文本提示生成高质量图像，支持多种 AI 模型（Gemini、DALL-E、Claude）。由 Nano Banana 技术驱动。
-  llm: This tool generates images from text descriptions using OpenRouter API. It supports multiple AI models including Google Gemini, OpenAI DALL-E, and Anthropic Claude for diverse image generation capabilities.
+    en_US: Generate high-quality images from text prompts using OpenRouter API with multiple AI models support (Gemini, Claude). Powered by Nano Banana technology.
+    zh_Hans: 使用 OpenRouter API 从文本提示生成高质量图像，支持多种 AI 模型（Gemini、Claude）。由 Nano Banana 技术驱动。
+  llm: This tool generates images from text descriptions using OpenRouter API. It supports multiple AI models including Google Gemini and Anthropic Claude for diverse image generation capabilities.
 
 # 扩展配置
 extra:
@@ -48,15 +48,15 @@ parameters:
       zh_Hans: Gemini 2.5 Flash (免费) - 快速且质量良好
     value: "google/gemini-2.5-flash-image-preview:free"
   - label:
-      en_US: DALL-E 3 (Premium) - Highest Quality
-      zh_Hans: DALL-E 3 (付费) - 最高质量
-    value: "openai/dall-e-3"
+      en_US: Gemini 2.5 Flash (Premium) - Enhanced Performance
+      zh_Hans: Gemini 2.5 Flash (付费) - 增强性能
+    value: "google/gemini-2.5-flash-image-preview"
   - label:
       en_US: Claude 3.5 Sonnet (Premium) - Creative & Artistic
       zh_Hans: Claude 3.5 Sonnet (付费) - 创意艺术风格
     value: "anthropic/claude-3-5-sonnet-20241022"
   default: "google/gemini-2.5-flash-image-preview:free"
-  required: false
+  required: true
 
 - form: form
   human_description:
