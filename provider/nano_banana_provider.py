@@ -56,27 +56,15 @@ class NanaBananaProvider(ToolProvider):
             ToolProviderCredentialValidationError: 当 API 连接测试失败时
         """
         try:
+            # 使用公开的模型列表接口进行校验，避免因为模型不可用导致 404
             headers = {
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json"
             }
-            
-            # 使用一个更通用的模型进行测试，避免404错误
-            test_payload = {
-                "model": "deepseek/deepseek-chat-v3.1:free",  # 使用更常见的模型进行验证
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": "test"  # 简化内容格式
-                    }
-                ],
-                "max_tokens": 1  # 最小 token 数量，减少费用
-            }
-            
-            response = requests.post(
-                "https://openrouter.ai/api/v1/chat/completions",
+
+            response = requests.get(
+                "https://openrouter.ai/api/v1/models",
                 headers=headers,
-                json=test_payload,
                 timeout=10
             )
             
@@ -97,7 +85,7 @@ class NanaBananaProvider(ToolProvider):
                 raise ToolProviderCredentialValidationError(
                     "OpenRouter 服务器暂时不可用"
                 )
-            elif response.status_code not in [200, 400]:  # 400 可能是因为测试请求格式
+            elif response.status_code != 200:
                 raise ToolProviderCredentialValidationError(
                     f"OpenRouter API 连接测试失败，状态码: {response.status_code}"
                 )
