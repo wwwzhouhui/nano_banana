@@ -1,9 +1,9 @@
 # 工具描述
 description:
   human:
-    en_US: Generate high-quality images from text prompts using OpenRouter API with multiple AI models support (Gemini, Claude). Powered by Nano Banana technology.
-    zh_Hans: 使用 OpenRouter API 从文本提示生成高质量图像，支持多种 AI 模型（Gemini、Claude）。由 Nano Banana 技术驱动。
-  llm: This tool generates images from text descriptions using OpenRouter API. It supports multiple AI models including Google Gemini and Anthropic Claude for diverse image generation capabilities.
+    en_US: Generate high-quality images from text prompts using OpenRouter API with Gemini image preview models. Powered by Nano Banana technology.
+    zh_Hans: 使用 OpenRouter API 和 Gemini 图像预览模型从文本提示生成高质量图像。由 Nano Banana 技术驱动。
+  llm: This tool generates images from text descriptions using OpenRouter API. It supports Gemini image preview models and also allows manually entering any OpenRouter model ID for future expansion.
 
 # 扩展配置
 extra:
@@ -35,8 +35,8 @@ parameters:
 
 - form: form
   human_description:
-    en_US: The AI model to use for image generation. Different models have different capabilities, quality, and costs. Free models are great for testing, premium models offer higher quality.
-    zh_Hans: 用于图像生成的 AI 模型。不同模型具有不同的能力、质量和成本。免费模型适合测试，付费模型提供更高质量。
+    en_US: The AI model to use for image generation. Choose one of the built-in Gemini image preview models, or use the manual model field below to enter another OpenRouter model ID.
+    zh_Hans: 用于图像生成的 AI 模型。可选择内置的 Gemini 图像预览模型，或通过下方“手工填写模型”字段输入其他 OpenRouter 模型 ID。
   label:
     en_US: AI Model
     zh_Hans: AI 模型
@@ -44,24 +44,43 @@ parameters:
   type: select
   options:
   - label:
-      en_US: Gemini 2.5 Flash (Free) - Fast & Good Quality
-      zh_Hans: Gemini 2.5 Flash (免费) - 快速且质量良好
-    value: "google/gemini-2.5-flash-image-preview:free"
+      en_US: Gemini 3.1 Flash Image Preview - Fast default choice
+      zh_Hans: Gemini 3.1 Flash Image Preview - 默认快速模型
+    value: "google/gemini-3.1-flash-image-preview"
   - label:
-      en_US: Gemini 2.5 Flash (Premium) - Enhanced Performance
-      zh_Hans: Gemini 2.5 Flash (付费) - 增强性能
-    value: "google/gemini-2.5-flash-image-preview"
-  - label:
-      en_US: Claude 3.5 Sonnet (Premium) - Creative & Artistic
-      zh_Hans: Claude 3.5 Sonnet (付费) - 创意艺术风格
-    value: "anthropic/claude-3-5-sonnet-20241022"
-  default: "google/gemini-2.5-flash-image-preview:free"
+      en_US: Gemini 3 Pro Image Preview - Higher quality option
+      zh_Hans: Gemini 3 Pro Image Preview - 更高质量选项
+    value: "google/gemini-3-pro-image-preview"
+  default: "google/gemini-3.1-flash-image-preview"
   required: true
 
 - form: form
   human_description:
-    en_US: Optional input image URL for image-to-image generation. Provide an image URL to transform or modify an existing image based on your prompt. Leave empty for text-only generation.
-    zh_Hans: 可选的输入图像URL，用于图像到图像生成。提供图像URL以基于您的提示词转换或修改现有图像。留空则仅使用文本生成。
+    en_US: Optional manual OpenRouter model ID. If provided, it overrides the AI Model dropdown selection.
+    zh_Hans: 可选的 OpenRouter 模型 ID 手工输入项。填写后会覆盖上方 AI 模型下拉选择。
+  label:
+    en_US: Manual Model ID (Optional)
+    zh_Hans: 手工填写模型 ID（可选）
+  name: model_manual
+  type: string
+  required: false
+
+- form: llm
+  human_description:
+    en_US: Optional input image file for image-to-image generation. Upload or pass an image from a previous workflow step. Leave empty for text-only generation.
+    zh_Hans: 可选的输入图像文件，用于图像到图像生成。可上传图片或传入上一步工作流生成的图片。留空则仅使用文本生成。
+  label:
+    en_US: Input Image (Optional)
+    zh_Hans: 输入图像（可选）
+  llm_description: Optional input image file for image-to-image generation.
+  name: input_image
+  type: file
+  required: false
+
+- form: form
+  human_description:
+    en_US: Optional public image URL fallback for image-to-image generation. Use this only when you want to provide a direct http(s) image link.
+    zh_Hans: 可选的公开图片URL兜底参数，用于图像到图像生成。仅在需要直接提供 http(s) 图片链接时使用。
   label:
     en_US: Input Image URL (Optional)
     zh_Hans: 输入图像URL（可选）

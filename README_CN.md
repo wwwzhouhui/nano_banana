@@ -8,10 +8,11 @@
 
 ## ✨ 特性
 
-- 🎨 **多模型支持**: 支持 Google Gemini、OpenAI DALL-E、Anthropic Claude 等多种图像生成模型
-- 🆓 **免费选项**: 提供免费的 Gemini 模型选项，适合测试和轻量使用
-- 💎 **高质量输出**: 支持付费高端模型，提供专业级图像质量
-- 🔄 **图像转换**: 支持图像到图像的转换功能
+- 🎨 **多模型支持**: 支持 OpenRouter 上的 Gemini 图像预览模型等图像生成模型
+- 📝 **纯文生图可用**: 只传提示词即可生成图片，不强制要求传入图片
+- 🔄 **图生图支持**: 支持通过 Dify 文件输入或真实公网图片 URL 做图像转换
+- 🧠 **更安全的输入处理**: 当工作流传入 `1756601479774.picture.url` 这类占位变量时，会自动忽略并按未传图片处理
+- 🖼️ **更稳健的结果解析**: 同时兼容 OpenRouter 的 `message.images[*].image_url.url` 和分段 `message.content[*].image_url.url` 返回结构
 - 🌐 **多语言**: 完整的中英文双语支持
 - ⚡ **实时反馈**: 详细的生成进度和状态反馈
 - 🛡️ **错误处理**: 完善的错误处理和用户友好的提示
@@ -52,14 +53,33 @@ python tests/test_plugin.py
 
 ## 🎯 支持的模型
 
-### 免费模型
-- **Google Gemini 2.5 Flash**: 快速且质量良好，适合日常使用
+### 内置模型
+- **Google Gemini 3.1 Flash Image Preview** (`google/gemini-3.1-flash-image-preview`)：默认快速模型，适合大多数文生图和图生图场景
+- **Google Gemini 3 Pro Image Preview** (`google/gemini-3-pro-image-preview`)：更高质量选项，适合对画质要求更高的场景
 
-### 付费模型
-- **OpenAI DALL-E 3**: 最高质量的图像生成
-- **Anthropic Claude 3.5 Sonnet**: 创意和艺术风格图像
+### 手工模型覆盖
+- 你也可以通过 `model_manual` 手工填写任意兼容的 OpenRouter 模型 ID
+- 当填写了 `model_manual` 时，会覆盖下拉框中的模型选择
 
 ## 📖 使用示例
+
+### 输入模式
+
+#### 1. 纯文生图
+不传 `input_image` 和 `input_image_url`，插件会仅使用提示词请求 OpenRouter。
+
+#### 2. 使用 Dify 文件输入做图生图（推荐）
+在工作流中把图片文件变量绑定到 `input_image`。这是 Dify 场景下推荐的方式。
+
+#### 3. 使用公网 URL 兜底做图生图
+如果你已经有真实可访问的公网图片地址，可以传给 `input_image_url`。
+
+### 可选图片输入说明
+
+- `input_image` 的优先级高于 `input_image_url`
+- `input_image_url` 只接受真实 `http(s)` URL 或 `data:image/...`
+- 如果工作流绑定后传来类似 `1756601479774.picture.url` 这样的占位值，而实际没有上传图片，插件会按“未传图片”处理，继续走纯文生图
+- OpenRouter 返回图片时，插件会同时解析 `message.images` 和分段 `message.content` 两种结构
 
 ###   离线安装插件
 
@@ -128,13 +148,17 @@ nano-banana/
 ### API Key 配置
 - 在 Dify 插件配置中输入您的 OpenRouter API Key
 - 确保 API Key 格式正确 (`sk-or-v1-xxxxxx`)
-- 确认账户有足够余额（付费模型需要）
+- 确认所选模型对应的账户余额充足
+
+### 图片输入配置
+- 在 Dify 工作流上传图片或引用上游图片结果时，优先使用 `input_image`
+- 只有在你明确拥有真实公网图片地址或 `data:image/...` 时，才使用 `input_image_url`
+- 不建议手动把工作流占位字符串当成图片 URL 传入
 
 ### 模型选择建议
-- **测试阶段**: 使用免费的 Gemini 模型
-- **生产环境**: 根据质量需求选择付费模型
-- **艺术创作**: 推荐 Claude 3.5 Sonnet
-- **通用高质量**: 推荐 DALL-E 3
+- **默认 / 快速迭代**: 使用 `Google Gemini 3.1 Flash Image Preview`
+- **更高质量输出**: 使用 `Google Gemini 3 Pro Image Preview`
+- **自定义 OpenRouter 模型**: 如果下拉列表中没有你需要的模型，可以填写 `model_manual`
 
 ## 📊 性能优化
 
@@ -160,13 +184,26 @@ nano-banana/
    - 检查提示词是否包含敏感内容
    - 尝试更换模型
    - 简化提示词描述
+   - 如果是图生图场景，优先使用 `input_image` 而不是 `input_image_url`
 
-4. **网络问题**
+4. **图片输入未生效**
+   - 确认工作流中上传的图片绑定到了 `input_image`
+   - 如果 `input_image_url` 里是占位值而不是真实 URL，插件会自动忽略并继续纯文生图
+   - 如果确实要通过 URL 传图，请提供真实可访问的公网 `http(s)` URL 或 `data:image/...`
+
+5. **网络问题**
    - 检查网络连接
    - 确认防火墙设置
    - 尝试稍后重试
 
 ## 📝 更新日志
+
+### v0.0.4 (2026-03-07)
+- 🔖 插件版本更新到 0.0.4
+- 📝 同步文档中的最新版本信息
+- 🖼️ 优化 Dify 工作流中的可选图片输入处理
+- 🧠 当未实际上传图片时，自动忽略占位型 `input_image_url`，保证纯文生图继续可用
+- 🔍 同时支持从 `message.images` 和分段 `message.content` 中提取 OpenRouter 返回图片
 
 ### v0.0.1 (2025-08-30)
 - ✨ 初始版本发布

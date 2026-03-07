@@ -1,11 +1,285 @@
-import requests
-import json
 import base64
+import json
+import re
 from collections.abc import Generator
-from PIL import Image
 from io import BytesIO
-from dify_plugin.entities.tool import ToolInvokeMessage
+from urllib.parse import urlparse
+
+import requests
+from PIL import Image
+
 from dify_plugin import Tool
+from dify_plugin.entities.tool import ToolInvokeMessage
+
+DEFAULT_MODEL = "google/gemini-3.1-flash-image-preview"
+OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+MAX_INPUT_IMAGE_SIZE = 1024
+IMAGE_SOURCE_KEYS = (
+    "url",
+    "download_url",
+    "signed_url",
+    "preview_url",
+    "thumbnail_url",
+    "remote_url",
+    "file_url",
+    "source_url",
+    "href",
+)
+PLACEHOLDER_REFERENCE_PATTERN = re.compile(r"^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+){2,}$")
+COMMON_IMAGE_EXTENSIONS = (
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".webp",
+    ".gif",
+    ".bmp",
+    ".svg",
+)
+
+
+def _has_value(value) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, tuple, dict, set)):
+        return bool(value)
+    return True
+
+
+def _preview_value(value: str, limit: int = 80) -> str:
+    normalized = value.strip().replace("\n", " ")
+    if len(normalized) <= limit:
+        return normalized
+    return f"{normalized[:limit]}..."
+
+
+def _looks_like_placeholder_reference(value: str) -> bool:
+    normalized = value.strip()
+    lower_normalized = normalized.lower()
+
+    if normalized.startswith(("{{", "${")) or normalized.endswith("}}"):
+        return True
+
+    if "://" in normalized or normalized.startswith("data:image/"):
+        return False
+
+    if lower_normalized.endswith((".url", ".download_url", ".signed_url", ".preview_url")):
+        return True
+
+    return bool(
+        PLACEHOLDER_REFERENCE_PATTERN.fullmatch(normalized)
+        and not lower_normalized.endswith(COMMON_IMAGE_EXTENSIONS)
+    )
+
+
+def _validate_image_reference(image_reference: str, source_name: str) -> str:
+    normalized = (image_reference or "").strip()
+    if not normalized:
+        raise ValueError(f"❌ {source_name} 为空，无法读取输入图像。")
+
+    if normalized.startswith("data:image/"):
+        return normalized
+
+    parsed = urlparse(normalized)
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        return normalized
+
+    if _looks_like_placeholder_reference(normalized):
+        raise ValueError(
+            f"❌ {source_name} 看起来是变量引用或占位文本：{_preview_value(normalized)}。"
+            "请优先传入 input_image 文件参数，或提供真实的公网 http(s) 图片 URL / data:image URL。"
+        )
+
+    raise ValueError(
+        f"❌ {source_name} 仅支持公网 http(s) 图片 URL 或 data:image URL，"
+        f"当前值不受支持：{_preview_value(normalized)}"
+    )
+
+
+def _iter_image_reference_candidates(value, path: str = "input_image", seen=None):
+    if seen is None:
+        seen = set()
+
+    value_id = id(value)
+    if value_id in seen:
+        return
+    seen.add(value_id)
+
+    if isinstance(value, str):
+        yield path, value
+        return
+
+    if isinstance(value, dict):
+        image_url = value.get("image_url")
+        if isinstance(image_url, dict):
+            nested_url = image_url.get("url")
+            if isinstance(nested_url, str):
+                yield f"{path}.image_url.url", nested_url
+
+        for key in IMAGE_SOURCE_KEYS:
+            candidate = value.get(key)
+            if isinstance(candidate, str):
+                yield f"{path}.{key}", candidate
+
+        for key, nested_value in value.items():
+            if isinstance(nested_value, (dict, list, tuple)):
+                yield from _iter_image_reference_candidates(
+                    nested_value, f"{path}.{key}", seen
+                )
+        return
+
+    if isinstance(value, (list, tuple)):
+        for index, item in enumerate(value):
+            if isinstance(item, (str, dict, list, tuple)):
+                yield from _iter_image_reference_candidates(item, f"{path}[{index}]", seen)
+
+
+def _resolve_input_image_source(tool_parameters: dict) -> tuple[str | None, str | None]:
+    input_image = tool_parameters.get("input_image")
+    input_image_url = tool_parameters.get("input_image_url")
+
+    if _has_value(input_image):
+        seen_values = set()
+        first_error = None
+
+        for candidate_path, candidate_value in _iter_image_reference_candidates(input_image):
+            if not isinstance(candidate_value, str):
+                continue
+
+            normalized_candidate = candidate_value.strip()
+            if not normalized_candidate or normalized_candidate in seen_values:
+                continue
+            seen_values.add(normalized_candidate)
+
+            try:
+                return _validate_image_reference(normalized_candidate, candidate_path), "input_image"
+            except ValueError as exc:
+                if first_error is None:
+                    first_error = exc
+
+        if first_error is not None:
+            raise first_error
+
+        if isinstance(input_image, dict):
+            available_keys = ", ".join(list(input_image.keys())[:8]) or "无"
+            raise ValueError(
+                "❌ input_image 文件对象中未找到可用的图片地址字段。"
+                "请检查是否传入了包含 url、download_url、signed_url、preview_url 或 image_url.url 的文件对象。"
+                f"当前顶层字段：{available_keys}"
+            )
+
+        raise ValueError(
+            "❌ input_image 输入格式暂不支持。请传入 Dify 文件对象，或改用 input_image_url 提供真实的公网 URL / data:image URL。"
+        )
+
+    if isinstance(input_image_url, str) and input_image_url.strip():
+        normalized_input_image_url = input_image_url.strip()
+        if _looks_like_placeholder_reference(normalized_input_image_url):
+            return None, None
+        return _validate_image_reference(normalized_input_image_url, "input_image_url"), "input_image_url"
+
+    return None, None
+
+
+def _load_image_bytes(image_reference: str) -> bytes:
+    if image_reference.startswith("data:image/"):
+        try:
+            _, base64_data = image_reference.split(",", 1)
+            return base64.b64decode(base64_data)
+        except Exception as exc:
+            raise ValueError(f"无法解析 data:image 输入：{exc}") from exc
+
+    response = requests.get(image_reference, timeout=30)
+    response.raise_for_status()
+    return response.content
+
+
+def _normalize_input_image_to_data_url(image_reference: str) -> tuple[str, tuple[int, int], int]:
+    image_bytes = _load_image_bytes(image_reference)
+    image = Image.open(BytesIO(image_bytes))
+
+    if max(image.size) > MAX_INPUT_IMAGE_SIZE:
+        image.thumbnail((MAX_INPUT_IMAGE_SIZE, MAX_INPUT_IMAGE_SIZE), Image.Resampling.LANCZOS)
+
+    if image.mode != "RGB":
+        image = image.convert("RGB")
+
+    output = BytesIO()
+    image.save(output, format="JPEG", quality=85)
+    jpeg_bytes = output.getvalue()
+    data_url = f"data:image/jpeg;base64,{base64.b64encode(jpeg_bytes).decode('utf-8')}"
+    return data_url, image.size, len(jpeg_bytes)
+
+
+def _extract_image_reference(item: dict) -> str:
+    if not isinstance(item, dict):
+        return ""
+
+    image_url = item.get("image_url")
+    if isinstance(image_url, dict):
+        url = image_url.get("url")
+        if isinstance(url, str):
+            return url.strip()
+
+    if isinstance(image_url, str):
+        return image_url.strip()
+
+    url = item.get("url")
+    if isinstance(url, str):
+        return url.strip()
+
+    return ""
+
+
+def _extract_generated_images(message: dict) -> list[str]:
+    images = []
+
+    for image_item in message.get("images", []) or []:
+        image_reference = _extract_image_reference(image_item)
+        if image_reference:
+            images.append(image_reference)
+
+    if images:
+        return images
+
+    content = message.get("content")
+    if isinstance(content, list):
+        for content_item in content:
+            if not isinstance(content_item, dict):
+                continue
+            if content_item.get("type") != "image_url":
+                continue
+
+            image_reference = _extract_image_reference(content_item)
+            if image_reference:
+                images.append(image_reference)
+
+    return images
+
+
+def _extract_message_text(message: dict) -> str:
+    content = message.get("content")
+    if isinstance(content, str):
+        return content
+
+    if isinstance(content, list):
+        text_parts = []
+        for item in content:
+            if isinstance(item, dict) and item.get("type") == "text" and item.get("text"):
+                text_parts.append(str(item.get("text")))
+        return " ".join(text_parts).strip()
+
+    return ""
+
+
+def _image_reference_to_png_blob(image_reference: str) -> bytes:
+    image_bytes = _load_image_bytes(image_reference)
+    image = Image.open(BytesIO(image_bytes))
+    output = BytesIO()
+    image.save(output, format="PNG")
+    return output.getvalue()
+
 
 class Text2ImageTool(Tool):
     def _invoke(
@@ -13,227 +287,147 @@ class Text2ImageTool(Tool):
     ) -> Generator[ToolInvokeMessage, None, None]:
         """
         基于 OpenRouter API 的 Nano Banana 文生图工具
-        完全基于 zz.py 的实现逻辑
-        
+
         Args:
-            tool_parameters: 工具参数字典，包含 prompt、model 和可选的 input_image_url
-            
+            tool_parameters: 工具参数字典，包含 prompt、model、可选的 model_manual、input_image 和 input_image_url
+
         Yields:
             ToolInvokeMessage: 工具调用消息，包括进度反馈和最终图像结果
         """
-        # 1. 获取 API 配置
         api_key = self.runtime.credentials.get("api_key")
-        api_url = "https://openrouter.ai/api/v1/chat/completions"
-        
-        # 2. 获取和验证参数
+
         prompt = tool_parameters.get("prompt", "")
         if not prompt:
             yield self.create_text_message("❌ 请输入图像生成提示词")
             return
-            
-        model = tool_parameters.get("model", "google/gemini-2.5-flash-image-preview")
-        input_image_url = tool_parameters.get("input_image_url", "")
-        
-        # 调试信息：显示接收到的参数
-        yield self.create_text_message(f"🔍 调试信息 - 接收到的模型参数: {model}")
-        yield self.create_text_message(f"🔍 调试信息 - 所有参数: {tool_parameters}")
-        
-        # 3. 构建请求头（完全按照 zz.py 的格式）
+
+        model_manual = (tool_parameters.get("model_manual") or "").strip()
+        selected_model = (tool_parameters.get("model") or "").strip()
+        model = model_manual or selected_model or DEFAULT_MODEL
+
         headers = {
-            'Authorization': f'Bearer {api_key}',
-            'Content-Type': 'application/json'
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
         }
-        
+
         try:
+            raw_input_image = tool_parameters.get("input_image")
+            raw_input_image_url = tool_parameters.get("input_image_url")
+            normalized_input_image_url = (
+                raw_input_image_url.strip()
+                if isinstance(raw_input_image_url, str)
+                else ""
+            )
+            input_image_reference, input_source_name = _resolve_input_image_source(tool_parameters)
+            ignored_placeholder_input_image_url = (
+                not _has_value(raw_input_image)
+                and bool(normalized_input_image_url)
+                and _looks_like_placeholder_reference(normalized_input_image_url)
+                and input_image_reference is None
+            )
+
+            yield self.create_text_message(f"🔍 调试信息 - 使用模型: {model}")
+            if _has_value(raw_input_image):
+                yield self.create_text_message("🔍 调试信息 - 检测到 input_image 文件输入")
+            elif input_source_name == "input_image_url":
+                yield self.create_text_message("🔍 调试信息 - 检测到 input_image_url 字符串输入")
+            elif ignored_placeholder_input_image_url:
+                yield self.create_text_message("🔍 调试信息 - input_image_url 为占位值，已按未传图片处理")
+
             yield self.create_text_message("🍌 Nano Banana 正在启动图像生成...")
             yield self.create_text_message("🚀 正在连接 OpenRouter API...")
             yield self.create_text_message(f"🤖 使用模型: {model}")
-            yield self.create_text_message(f"📝 提示词: {prompt[:100]}{'...' if len(prompt) > 100 else ''}")
-            
-            # 4. 构建消息内容（基于 zz.py 的结构）
-            content = [
-                {
-                    "type": "text",
-                    "text": prompt
-                }
-            ]
-            
-            # 如果有输入图像，添加到内容中
-            if input_image_url:
-                yield self.create_text_message(f"🖼️ 输入图像: {input_image_url}")
+            yield self.create_text_message(
+                f"📝 提示词: {prompt[:100]}{'...' if len(prompt) > 100 else ''}"
+            )
+
+            content = [{"type": "text", "text": prompt}]
+            if input_image_reference:
+                yield self.create_text_message(f"🖼️ 输入图像来源: {input_source_name}")
                 yield self.create_text_message("🔍 正在处理输入图像...")
-                
+
                 try:
-                    # 下载图像并转换为base64格式
-                    yield self.create_text_message("📥 正在下载图像...")
-                    img_response = requests.get(input_image_url, timeout=30)
-                    img_response.raise_for_status()
-                    
-                    # 验证图像数据
-                    image = Image.open(BytesIO(img_response.content))
-                    yield self.create_text_message(f"✅ 图像下载成功，尺寸: {image.size}")
-                    
-                    # 检查图像大小，如果太大则压缩
-                    max_size = 1024  # 最大尺寸
-                    if max(image.size) > max_size:
-                        yield self.create_text_message(f"🔧 图像过大，正在压缩到 {max_size}px...")
-                        image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
-                        yield self.create_text_message(f"✅ 压缩完成，新尺寸: {image.size}")
-                    
-                    # 转换为RGB格式（确保兼容性）
-                    if image.mode != 'RGB':
-                        yield self.create_text_message(f"🔧 转换图像格式: {image.mode} -> RGB")
-                        image = image.convert('RGB')
-                    
-                    # 转换为base64格式
-                    yield self.create_text_message("🔄 正在转换为base64格式...")
-                    img_byte_arr = BytesIO()
-                    image.save(img_byte_arr, format='JPEG', quality=85)
-                    img_byte_arr = img_byte_arr.getvalue()
-                    
-                    # 编码为base64
-                    img_base64 = base64.b64encode(img_byte_arr).decode('utf-8')
-                    data_url = f"data:image/jpeg;base64,{img_base64}"
-                    
-                    yield self.create_text_message(f"✅ 图像处理完成，大小: {len(img_byte_arr)} 字节")
-                    
-                    content.append({
+                    data_url, image_size, image_bytes_size = _normalize_input_image_to_data_url(
+                        input_image_reference
+                    )
+                except Exception as exc:
+                    yield self.create_text_message(f"❌ 输入图像处理失败: {exc}")
+                    yield self.create_text_message(
+                        "💡 请确认传入的是 input_image 文件对象，或真实可访问的公网图片 URL / data:image URL。"
+                    )
+                    return
+
+                content.append(
+                    {
                         "type": "image_url",
                         "image_url": {
-                            "url": data_url
-                        }
-                    })
-                    yield self.create_text_message("🔄 将进行图像到图像转换...")
-                    
-                except Exception as e:
-                    yield self.create_text_message(f"❌ 图像处理失败: {str(e)}")
-                    yield self.create_text_message("💡 建议:")
-                    yield self.create_text_message("1. 检查图像URL是否正确")
-                    yield self.create_text_message("2. 确保图像格式为 JPG/PNG/WebP")
-                    yield self.create_text_message("3. 尝试使用其他图像URL")
-                    return
-            
-            # 5. 构建请求载荷（完全按照 zz.py 的格式）
+                            "url": data_url,
+                        },
+                    }
+                )
+                yield self.create_text_message(f"✅ 输入图像处理完成，尺寸: {image_size}")
+                yield self.create_text_message(f"📊 输入图像大小: {image_bytes_size} 字节")
+                yield self.create_text_message("🔄 将进行图像到图像转换...")
+
             payload = {
                 "model": model,
                 "messages": [
                     {
                         "role": "user",
-                        "content": content
+                        "content": content,
                     }
-                ]
+                ],
             }
-            
+
             yield self.create_text_message("⏳ 正在生成图像，请稍候...")
             yield self.create_text_message("🎨 AI 正在发挥创意...")
-            
-            # 6. 发送请求（完全按照 zz.py 的方式）
+
             response = requests.post(
-                api_url,
+                OPENROUTER_API_URL,
                 headers=headers,
-                data=json.dumps(payload),  # 使用 data 参数，与 zz.py 保持一致
-                timeout=60
+                data=json.dumps(payload),
+                timeout=60,
             )
-            
-            # 7. 检查响应状态
+
             if response.status_code != 200:
                 yield self.create_text_message(f"🔧 API 响应状态码: {response.status_code}")
                 yield self.create_text_message(f"🔧 响应内容: {response.text[:300]}")
-            
+
             response.raise_for_status()
-            
-            # 8. 解析响应数据（按照 zz.py 的响应格式）
             response_data = response.json()
-            
-            # 检查响应结构
+
             choices = response_data.get("choices", [])
             if not choices:
                 yield self.create_text_message("❌ API 响应中没有找到生成结果")
                 return
-            
+
             message = choices[0].get("message", {})
-            images = message.get("images", [])
-            
-            if not images:
+            generated_images = _extract_generated_images(message)
+
+            if not generated_images:
                 yield self.create_text_message("❌ 没有生成图像数据")
-                # 输出描述文本（如果有）
-                content = message.get("content", "")
-                if content:
-                    yield self.create_text_message(f"📝 模型响应: {content}")
+                message_text = _extract_message_text(message)
+                if message_text:
+                    yield self.create_text_message(f"📝 模型响应: {message_text}")
                 return
-            
-            yield self.create_text_message(f"🎉 成功生成 {len(images)} 张图像！")
-            
-            # 9. 处理生成的图像（按照 zz.py 的响应格式）
-            for i, image_data in enumerate(images):
-                image_url = image_data.get("image_url", {}).get("url", "")
-                
-                if not image_url:
-                    yield self.create_text_message(f"❌ 第 {i+1} 张图像数据无效")
+
+            yield self.create_text_message(f"🎉 成功生成 {len(generated_images)} 张图像！")
+
+            for index, image_reference in enumerate(generated_images, start=1):
+                yield self.create_text_message(f"🎨 正在处理第 {index} 张图像...")
+                try:
+                    image_blob = _image_reference_to_png_blob(image_reference)
+                except Exception as exc:
+                    yield self.create_text_message(f"❌ 处理第 {index} 张图像时出错: {exc}")
                     continue
-                
-                # 检查是否是 Base64 格式（data:image/png;base64,xxx）
-                if image_url.startswith("data:image/"):
-                    yield self.create_text_message(f"🎨 正在处理第 {i+1} 张图像...")
-                    
-                    # 提取 Base64 数据
-                    try:
-                        # 分离 MIME 类型和 Base64 数据
-                        header, base64_data = image_url.split(",", 1)
-                        
-                        # 解码 Base64 数据
-                        image_bytes = base64.b64decode(base64_data)
-                        
-                        # 验证图像数据
-                        image = Image.open(BytesIO(image_bytes))
-                        
-                        # 转换为 PNG 格式（统一格式）
-                        img_byte_arr = BytesIO()
-                        image.save(img_byte_arr, format='PNG')
-                        img_byte_arr = img_byte_arr.getvalue()
-                        
-                        # 返回图像
-                        yield self.create_blob_message(
-                            blob=img_byte_arr,
-                            meta={"mime_type": "image/png"}
-                        )
-                        
-                        yield self.create_text_message(f"✅ 第 {i+1} 张图像生成完成！")
-                        yield self.create_text_message(f"📊 图像大小: {len(img_byte_arr)} 字节")
-                        
-                    except Exception as e:
-                        yield self.create_text_message(f"❌ 处理第 {i+1} 张图像时出错: {str(e)}")
-                        continue
-                        
-                else:
-                    # 如果是 URL 格式，下载图像
-                    yield self.create_text_message(f"🌐 正在下载第 {i+1} 张图像...")
-                    try:
-                        img_response = requests.get(image_url, timeout=30)
-                        img_response.raise_for_status()
-                        
-                        # 验证图像数据
-                        image = Image.open(BytesIO(img_response.content))
-                        
-                        # 转换为 PNG 格式
-                        img_byte_arr = BytesIO()
-                        image.save(img_byte_arr, format='PNG')
-                        img_byte_arr = img_byte_arr.getvalue()
-                        
-                        # 返回图像
-                        yield self.create_blob_message(
-                            blob=img_byte_arr,
-                            meta={"mime_type": "image/png"}
-                        )
-                        
-                        yield self.create_text_message(f"✅ 第 {i+1} 张图像下载完成！")
-                        yield self.create_text_message(f"📊 图像大小: {len(img_byte_arr)} 字节")
-                        
-                    except Exception as e:
-                        yield self.create_text_message(f"❌ 下载第 {i+1} 张图像时出错: {str(e)}")
-                        continue
-            
-            # 10. 输出使用统计信息（如果有）
+
+                yield self.create_blob_message(
+                    blob=image_blob,
+                    meta={"mime_type": "image/png"},
+                )
+                yield self.create_text_message(f"✅ 第 {index} 张图像处理完成！")
+                yield self.create_text_message(f"📊 图像大小: {len(image_blob)} 字节")
+
             usage = response_data.get("usage", {})
             if usage:
                 total_tokens = usage.get("total_tokens", 0)
@@ -242,50 +436,52 @@ class Text2ImageTool(Tool):
                 yield self.create_text_message(
                     f"📊 Token 使用统计: 总计 {total_tokens} (提示 {prompt_tokens} + 完成 {completion_tokens})"
                 )
-            
+
             yield self.create_text_message("🍌 Nano Banana 图像生成任务完成！")
             yield self.create_text_message("🎉 感谢使用 Nano Banana 文生图服务！")
-        
-        except requests.exceptions.HTTPError as e:
-            # HTTP 错误处理（基于 OpenRouter 的错误码）
-            if e.response.status_code == 401:
+
+        except requests.exceptions.HTTPError as exc:
+            if exc.response.status_code == 401:
                 yield self.create_text_message("❌ OpenRouter API Key 无效，请检查您的 API Key")
                 yield self.create_text_message("💡 请前往 https://openrouter.ai/keys 获取有效的 API Key")
-            elif e.response.status_code == 402:
+            elif exc.response.status_code == 402:
                 yield self.create_text_message("❌ OpenRouter 账户余额不足")
                 yield self.create_text_message("💡 请前往 https://openrouter.ai/credits 充值")
-            elif e.response.status_code == 429:
+            elif exc.response.status_code == 429:
                 yield self.create_text_message("❌ API 调用频率过高，请稍后再试")
                 yield self.create_text_message("💡 建议等待几分钟后重试")
-            elif e.response.status_code == 500:
+            elif exc.response.status_code == 500:
                 yield self.create_text_message("❌ OpenRouter 服务器内部错误")
                 yield self.create_text_message("💡 可能的解决方案:")
                 yield self.create_text_message("1. 检查提示词是否包含敏感内容")
                 yield self.create_text_message("2. 尝试更换模型")
                 yield self.create_text_message("3. 稍后重试")
             else:
-                yield self.create_text_message(f"❌ HTTP 错误: {e.response.status_code}")
-                if hasattr(e.response, 'text'):
-                    yield self.create_text_message(f"🔧 错误详情: {e.response.text[:200]}")
-                    
+                yield self.create_text_message(f"❌ HTTP 错误: {exc.response.status_code}")
+                if hasattr(exc.response, "text"):
+                    yield self.create_text_message(f"🔧 错误详情: {exc.response.text[:200]}")
+
         except requests.exceptions.Timeout:
             yield self.create_text_message("❌ 请求超时，请检查网络连接或稍后重试")
             yield self.create_text_message("💡 建议检查网络连接状态")
-            
-        except requests.exceptions.RequestException as e:
-            yield self.create_text_message(f"❌ 网络请求错误: {str(e)}")
+
+        except requests.exceptions.RequestException as exc:
+            yield self.create_text_message(f"❌ 网络请求错误: {exc}")
             yield self.create_text_message("💡 请检查网络连接是否正常")
-            
-        except json.JSONDecodeError as e:
-            yield self.create_text_message(f"❌ API 响应解析错误: {str(e)}")
+
+        except json.JSONDecodeError as exc:
+            yield self.create_text_message(f"❌ API 响应解析错误: {exc}")
             yield self.create_text_message("🔧 这可能是 OpenRouter API 返回了非 JSON 格式的响应")
-            
-        except KeyError as e:
-            yield self.create_text_message(f"❌ API 响应格式错误，缺少字段: {str(e)}")
-            
-        except Exception as e:
-            yield self.create_text_message(f"❌ 生成图像时出现未知错误: {str(e)}")
+
+        except KeyError as exc:
+            yield self.create_text_message(f"❌ API 响应格式错误，缺少字段: {exc}")
+
+        except ValueError as exc:
+            yield self.create_text_message(str(exc))
+
+        except Exception as exc:
+            yield self.create_text_message(f"❌ 生成图像时出现未知错误: {exc}")
             yield self.create_text_message("🔧 请联系技术支持或查看详细日志")
-            # 在开发环境中可以添加详细的错误信息
             import traceback
+
             yield self.create_text_message(f"🔧 调试信息: {traceback.format_exc()}")

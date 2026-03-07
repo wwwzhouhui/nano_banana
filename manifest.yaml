@@ -16,7 +16,7 @@ meta:
     entrypoint: main
     language: python
     version: '3.12'
-  version: 0.0.3
+  version: 0.0.4
 
 # 插件配置
 name: nano_banana_text2image
@@ -37,4 +37,4 @@ resource:
 # 标签和类型
 tags: [productivity]
 type: plugin
-version: 0.0.3
+version: 0.0.4
