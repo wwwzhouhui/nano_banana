@@ -1,5 +1,6 @@
 import base64
 import json
+import os
 import re
 from collections.abc import Generator
 from io import BytesIO
@@ -25,6 +26,7 @@ IMAGE_SOURCE_KEYS = (
     "source_url",
     "href",
 )
+DIFY_INTERNAL_FILE_PATH_PREFIX = "/files/"
 PLACEHOLDER_REFERENCE_PATTERN = re.compile(r"^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+){2,}$")
 COMMON_IMAGE_EXTENSIONS = (
     ".png",
@@ -73,6 +75,58 @@ def _looks_like_placeholder_reference(value: str) -> bool:
     )
 
 
+def _resolve_dify_internal_url(relative_path: str) -> str | None:
+    """尝试通过环境变量将 Dify 内部文件路径构造为完整 URL。
+    优先使用 Docker 内部地址（INTERNAL_FILES_URL / DIFY_INNER_API_URL），
+    确保 plugin_daemon 容器能通过 Docker 网络访问 API 服务。
+    """
+    for env_var in (
+        "INTERNAL_FILES_URL",   # Dify 专为插件内部通信设置的地址
+        "DIFY_INNER_API_URL",   # plugin_daemon 内置的内部 API 地址（默认 http://api:5001）
+        "FILES_URL",            # 外部文件访问地址（可能不可达）
+        "CONSOLE_API_URL",
+        "SERVICE_API_URL",
+    ):
+        base = os.environ.get(env_var, "").strip().rstrip("/")
+        if base and base.startswith(("http://", "https://")):
+            return f"{base}{relative_path}"
+    return None
+
+
+def _try_read_dify_file_blob(file_obj) -> bytes | None:
+    """尝试通过 Dify File 对象的 .blob 属性直接读取二进制内容。"""
+    if isinstance(file_obj, (list, tuple)):
+        for item in file_obj:
+            result = _try_read_dify_file_blob(item)
+            if result is not None:
+                return result
+        return None
+
+    if isinstance(file_obj, (dict, str, int, float, bool, type(None))):
+        return None
+
+    try:
+        blob_data = file_obj.blob
+        if isinstance(blob_data, bytes) and len(blob_data) > 0:
+            return blob_data
+    except Exception:
+        pass
+    return None
+
+
+def _detect_mime_type(data: bytes) -> str:
+    """根据文件头魔数检测图片 MIME 类型。"""
+    if data[:4] == b"\x89PNG":
+        return "image/png"
+    if data[:2] == b"\xff\xd8":
+        return "image/jpeg"
+    if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    if data[:3] == b"GIF":
+        return "image/gif"
+    return "image/jpeg"
+
+
 def _validate_image_reference(image_reference: str, source_name: str) -> str:
     normalized = (image_reference or "").strip()
     if not normalized:
@@ -84,6 +138,18 @@ def _validate_image_reference(image_reference: str, source_name: str) -> str:
     parsed = urlparse(normalized)
     if parsed.scheme in {"http", "https"} and parsed.netloc:
         return normalized
+
+    # 处理 Dify 内部文件路径（如 /files/{uuid}/file-preview?timestamp=...）
+    if normalized.startswith(DIFY_INTERNAL_FILE_PATH_PREFIX):
+        full_url = _resolve_dify_internal_url(normalized)
+        if full_url:
+            return full_url
+        raise ValueError(
+            f"❌ {source_name} 是 Dify 内部文件路径（{_preview_value(normalized)}），"
+            "插件无法直接访问。请在 Dify 的 .env 文件中配置 FILES_URL 环境变量"
+            "（如 FILES_URL=http://你的主机IP:端口），然后重启服务；"
+            "或改用 input_image 文件参数传入图片。"
+        )
 
     if _looks_like_placeholder_reference(normalized):
         raise ValueError(
@@ -133,6 +199,14 @@ def _iter_image_reference_candidates(value, path: str = "input_image", seen=None
         for index, item in enumerate(value):
             if isinstance(item, (str, dict, list, tuple)):
                 yield from _iter_image_reference_candidates(item, f"{path}[{index}]", seen)
+        return
+
+    # 处理 Dify File 等具有属性的对象（非 dict、str、list）
+    if hasattr(value, "__dict__"):
+        for key in IMAGE_SOURCE_KEYS:
+            candidate = getattr(value, key, None)
+            if isinstance(candidate, str):
+                yield f"{path}.{key}", candidate
 
 
 def _resolve_input_image_source(tool_parameters: dict) -> tuple[str | None, str | None]:
@@ -140,6 +214,14 @@ def _resolve_input_image_source(tool_parameters: dict) -> tuple[str | None, str 
     input_image_url = tool_parameters.get("input_image_url")
 
     if _has_value(input_image):
+        # 优先尝试 Dify File 对象的 .blob 属性直接读取二进制内容
+        blob_bytes = _try_read_dify_file_blob(input_image)
+        if blob_bytes is not None:
+            mime = _detect_mime_type(blob_bytes)
+            b64 = base64.b64encode(blob_bytes).decode("utf-8")
+            return f"data:{mime};base64,{b64}", "input_image"
+
+        # .blob 不可用，回退到从字段中提取 URL
         seen_values = set()
         first_error = None
 
@@ -327,7 +409,9 @@ class Text2ImageTool(Tool):
             )
 
             yield self.create_text_message(f"🔍 调试信息 - 使用模型: {model}")
-            if _has_value(raw_input_image):
+            if input_source_name == "input_image" and input_image_reference and input_image_reference.startswith("data:image/"):
+                yield self.create_text_message("🔍 调试信息 - 通过 File.blob 或 data URL 直接读取了输入图像")
+            elif _has_value(raw_input_image):
                 yield self.create_text_message("🔍 调试信息 - 检测到 input_image 文件输入")
             elif input_source_name == "input_image_url":
                 yield self.create_text_message("🔍 调试信息 - 检测到 input_image_url 字符串输入")

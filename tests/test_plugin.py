@@ -44,7 +44,7 @@ def _install_dify_plugin_stubs():
 
 _install_dify_plugin_stubs()
 
-from tools.text2image import DEFAULT_MODEL, Text2ImageTool
+from tools.text2image import DEFAULT_MODEL, Text2ImageTool, _resolve_dify_internal_url
 
 
 def _create_png_bytes(color=(255, 0, 0)) -> bytes:
@@ -285,6 +285,115 @@ def test_openrouter_message_content_segments_output_blob():
     assert blobs[0].blob.startswith(b"\x89PNG")
 
 
+def test_dify_file_blob_reads_binary_directly():
+    """Dify File 对象有 .blob 属性时，应直接读取二进制内容，不走 URL 提取。"""
+
+    class FakeFile:
+        """模拟 Dify File 对象"""
+
+        def __init__(self, data: bytes):
+            self._data = data
+            self.url = "/files/fake-uuid/file-preview?timestamp=123"
+            self.mime_type = "image/png"
+
+        @property
+        def blob(self):
+            return self._data
+
+    fake_file = FakeFile(TEST_IMAGE_BYTES)
+
+    messages, payload, _, mock_get_fn = _invoke_tool(
+        {
+            "prompt": "把这张图片做成手办",
+            "input_image": fake_file,
+        },
+    )
+
+    content = payload["messages"][0]["content"]
+    assert len(content) == 2
+    assert content[1]["type"] == "image_url"
+    assert content[1]["image_url"]["url"].startswith("data:image/")
+    # 不应发起任何 HTTP GET 请求（二进制内容直接来自 .blob）
+    assert mock_get_fn.call_count == 0
+    assert any("File.blob" in msg or "输入图像来源: input_image" in msg for msg in _text_messages(messages))
+
+
+def test_dify_file_blob_failure_falls_back_to_url():
+    """Dify File 对象 .blob 抛异常时，应回退到从字段提取 URL。"""
+
+    class BrokenFile:
+        """模拟 .blob 失败的 Dify File 对象"""
+
+        def __init__(self):
+            self.url = "https://cdn.example.com/real-image.png"
+            self.mime_type = "image/png"
+
+        @property
+        def blob(self):
+            raise ConnectionError("FILES_URL not configured")
+
+    broken_file = BrokenFile()
+
+    def mock_get(url, timeout=None):
+        assert url == "https://cdn.example.com/real-image.png"
+        return MockBinaryResponse(TEST_IMAGE_BYTES)
+
+    messages, payload, _, mock_get_fn = _invoke_tool(
+        {
+            "prompt": "把这张图片做成手办",
+            "input_image": broken_file,
+        },
+        get_side_effect=mock_get,
+    )
+
+    content = payload["messages"][0]["content"]
+    assert len(content) == 2
+    assert content[1]["type"] == "image_url"
+    assert content[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+    assert mock_get_fn.call_count == 1
+
+
+def test_dify_internal_url_resolved_via_files_url_env():
+    """input_image_url 为 Dify 内部路径时，应通过 FILES_URL 环境变量构造完整 URL。"""
+    dify_path = "/files/91a07498-a58c-4dc0-b83b-88575bde9156/file-preview?timestamp=123&sign=abc"
+
+    def mock_get(url, timeout=None):
+        assert url == f"http://192.168.1.100:8080{dify_path}"
+        return MockBinaryResponse(TEST_IMAGE_BYTES)
+
+    with patch.dict(os.environ, {"FILES_URL": "http://192.168.1.100:8080"}):
+        messages, payload, _, mock_get_fn = _invoke_tool(
+            {
+                "prompt": "把这张图片做成手办",
+                "input_image_url": dify_path,
+            },
+            get_side_effect=mock_get,
+        )
+
+    content = payload["messages"][0]["content"]
+    assert len(content) == 2
+    assert content[1]["type"] == "image_url"
+    assert content[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+    assert mock_get_fn.call_count == 1
+
+
+def test_dify_internal_url_without_env_gives_clear_error():
+    """input_image_url 为 Dify 内部路径但未配置 FILES_URL 时，应给出清晰错误提示。"""
+    dify_path = "/files/91a07498-a58c-4dc0-b83b-88575bde9156/file-preview?timestamp=123"
+
+    with patch.dict(os.environ, {}, clear=True):
+        messages, _, _, _ = _invoke_tool(
+            {
+                "prompt": "把这张图片做成手办",
+                "input_image_url": dify_path,
+            },
+        )
+
+    text = _text_messages(messages)
+    assert any("Dify 内部文件路径" in msg for msg in text)
+    assert any("FILES_URL" in msg for msg in text)
+
+
 def main():
     """主函数"""
     test_cases = [
@@ -296,6 +405,10 @@ def main():
         ("占位字符串忽略测试", test_placeholder_input_image_url_is_ignored_for_prompt_only_generation),
         ("message.images 输出解析测试", test_openrouter_message_images_data_url_outputs_blob),
         ("message.content 分段输出解析测试", test_openrouter_message_content_segments_output_blob),
+        ("File.blob 直读测试", test_dify_file_blob_reads_binary_directly),
+        ("File.blob 失败回退测试", test_dify_file_blob_failure_falls_back_to_url),
+        ("Dify 内部 URL 通过 FILES_URL 解析测试", test_dify_internal_url_resolved_via_files_url_env),
+        ("Dify 内部 URL 无环境变量错误提示测试", test_dify_internal_url_without_env_gives_clear_error),
     ]
 
     print("🍌 Nano Banana 文生图工具测试")

@@ -11,6 +11,8 @@
 - 🎨 **多模型支持**: 支持 OpenRouter 上的 Gemini 图像预览模型等图像生成模型
 - 📝 **纯文生图可用**: 只传提示词即可生成图片，不强制要求传入图片
 - 🔄 **图生图支持**: 支持通过 Dify 文件输入或真实公网图片 URL 做图像转换
+- 🔗 **Dify 内部图片直读**: 支持直接读取 Dify File 对象的二进制内容（`.blob`），自动转 base64 发送给 OpenRouter，无需公网 URL
+- 🏠 **本地部署友好**: 自动识别 Dify 内部文件路径（`/files/...`），通过 Docker 内网下载图片并转 base64，无需公网 IP
 - 🧠 **更安全的输入处理**: 当工作流传入 `1756601479774.picture.url` 这类占位变量时，会自动忽略并按未传图片处理
 - 🖼️ **更稳健的结果解析**: 同时兼容 OpenRouter 的 `message.images[*].image_url.url` 和分段 `message.content[*].image_url.url` 返回结构
 - 🌐 **多语言**: 完整的中英文双语支持
@@ -77,8 +79,10 @@ python tests/test_plugin.py
 ### 可选图片输入说明
 
 - `input_image` 的优先级高于 `input_image_url`
-- `input_image_url` 只接受真实 `http(s)` URL 或 `data:image/...`
-- 如果工作流绑定后传来类似 `1756601479774.picture.url` 这样的占位值，而实际没有上传图片，插件会按“未传图片”处理，继续走纯文生图
+- 当 `input_image` 是 Dify File 对象时，插件会优先通过 `.blob` 直接读取二进制内容，转 base64 后发送给 OpenRouter
+- 如果 `.blob` 不可用，会从 File 对象的 URL 字段下载图片
+- `input_image_url` 支持公网 `http(s)` URL、`data:image/...` URL，以及 Dify 内部文件路径（`/files/...`，需配置 `INTERNAL_FILES_URL`）
+- 如果工作流绑定后传来类似 `1756601479774.picture.url` 这样的占位值，而实际没有上传图片，插件会按”未传图片”处理，继续走纯文生图
 - OpenRouter 返回图片时，插件会同时解析 `message.images` 和分段 `message.content` 两种结构
 
 ###   离线安装插件
@@ -196,7 +200,20 @@ nano-banana/
    - 确认防火墙设置
    - 尝试稍后重试
 
+6. **本地部署图生图 Connection refused**
+   - 在 Dify 的 `.env` 中设置 `INTERNAL_FILES_URL=http://api:5001`
+   - 确保 `FILES_URL` 也已配置（如 `FILES_URL=http://api:5001` 或 `FILES_URL=http://你的主机IP:5001`）
+   - 修改后执行 `docker compose down && docker compose up -d` 重启 Dify
+   - 插件会优先通过 Docker 内网地址下载图片，转成 base64 后发送给 OpenRouter
+
 ## 📝 更新日志
+
+### v0.0.5 (2026-03-08)
+- 🔗 新增 Dify File 对象 `.blob` 直读支持，上传图片自动转 base64 发给 OpenRouter，无需公网 URL
+- 🏠 新增 Dify 内部文件路径（`/files/...`）自动解析，优先使用 `INTERNAL_FILES_URL` / `DIFY_INNER_API_URL` 等 Docker 内网地址
+- 🐛 修复本地部署（无公网 IP）场景下图生图功能 Connection refused 报错
+- 🧠 增强 `_iter_image_reference_candidates`，支持从 Dify File 对象属性中提取 URL 作为兜底
+- ⚠️ Dify 内部路径无法解析时，给出明确的 `FILES_URL` 配置指引
 
 ### v0.0.4 (2026-03-07)
 - 🔖 插件版本更新到 0.0.4
